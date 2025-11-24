@@ -10,26 +10,35 @@ x-healthcheck:
 
 services:
   broker:
-    image: confluentinc/cp-kafka:7.9.1-1-ubi8
-    env_file:
-      - ./env/kafka.env
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:29093'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    image: confluentinc/cp-kafka:7.9.1          # أو 8.0.0
+    hostname: broker
+    container_name: broker
     ports:
       - "9092:9092"
-    networks:
-      - lp
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
+      CLUSTER_ID: YmViZDBmOWJhYzNiNDQ3Yz
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - broker:/var/lib/kafka/data
+    networks:
+      - lp
     healthcheck:
-      <<: *healthcheck-common
-      test: ['CMD', 'kafka-broker-api-versions', '--bootstrap-server', 'broker:29092']
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   producer:
     build:
@@ -46,7 +55,7 @@ services:
 
   spark-master:
     image: apache/spark:3.5.3
-    command: /opt/bitnami/spark/sbin/start-master.sh
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     ports:
       - "8080:8080"
       - "7077:7077"
@@ -56,7 +65,7 @@ services:
 
   spark-worker:
     image: apache/spark:3.5.3
-    command: /opt/bitnami/spark/sbin/start-worker.sh spark://spark-master:7077
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     depends_on:
       - spark-master
     networks:
